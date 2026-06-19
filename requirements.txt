@@ -1,0 +1,139 @@
+# INSTRUCCIONES DE CONFIGURACIÓN
+## Sincronización automática iCal → Google Calendar (cada 10 minutos, gratis)
+
+---
+
+## PASO 1 — Crear cuenta de servicio en Google
+
+1. Ve a https://console.cloud.google.com
+2. Crea un proyecto nuevo (ponle el nombre que quieras, ej. "ical-sync")
+3. En el menú izquierdo: **APIs y servicios → Biblioteca**
+4. Busca **"Google Calendar API"** y actívala
+5. Ve a **APIs y servicios → Credenciales**
+6. Pulsa **"Crear credenciales" → "Cuenta de servicio"**
+7. Ponle un nombre (ej. "ical-sync-bot") y pulsa **Crear**
+8. En la lista de cuentas de servicio, pulsa sobre la que acabas de crear
+9. Ve a la pestaña **"Claves" → "Añadir clave" → "Crear clave nueva" → JSON**
+10. Se descargará un archivo `.json` — **guárdalo, lo necesitas luego**
+
+---
+
+## PASO 2 — Dar acceso al calendario de Google
+
+1. Abre https://calendar.google.com
+2. En el panel izquierdo, busca el calendario donde quieres ver las reservas
+   (puedes usar tu calendario principal o crear uno nuevo)
+3. Pulsa los tres puntos → **"Configuración y uso compartido"**
+4. Baja hasta **"Compartir con personas o grupos"**
+5. Añade el email de la cuenta de servicio (lo encontrarás en el archivo JSON
+   que descargaste, campo `"client_email"`)
+6. Dale permiso **"Realizar cambios en eventos"**
+7. Copia el **ID del calendario** (más abajo en esa misma página, bajo
+   "Integrar el calendario" → parece un email o una cadena larga)
+
+---
+
+## PASO 3 — Crear repositorio en GitHub
+
+1. Ve a https://github.com y crea una cuenta si no tienes
+2. Pulsa **"New repository"**
+3. Nómbralo `ical-sync`, márcalo como **Privado** y pulsa **"Create"**
+4. Sube los archivos de esta carpeta al repositorio:
+   - `scripts/sync.py`
+   - `.github/workflows/sync.yml`
+   - `requirements.txt`
+   - (puedes arrastrarlos directamente en la web de GitHub)
+
+---
+
+## PASO 4 — Configurar los Secrets en GitHub
+
+1. En tu repositorio GitHub, ve a **Settings → Secrets and variables → Actions**
+2. Pulsa **"New repository secret"** y crea estos dos secrets:
+
+### Secret 1: `GOOGLE_CREDENTIALS_JSON`
+- Abre el archivo `.json` que descargaste en el Paso 1
+- Copia **todo su contenido** y pégalo como valor del secret
+
+### Secret 2: `PROPERTIES_JSON`
+- Copia y adapta este JSON con tus propiedades y URLs iCal:
+
+```json
+[
+  {
+    "name": "Apartamento Centro 1",
+    "airbnb_ical": "https://www.airbnb.es/calendar/ical/XXXXXXXX.ics",
+    "booking_ical": "https://ical.booking.com/v1/export?t=XXXXXXXX",
+    "calendar_id": "ID_DEL_CALENDARIO_DEL_PASO_2"
+  },
+  {
+    "name": "Casa Playa",
+    "airbnb_ical": "https://www.airbnb.es/calendar/ical/YYYYYYYY.ics",
+    "booking_ical": "https://ical.booking.com/v1/export?t=YYYYYYYY",
+    "calendar_id": "ID_DEL_CALENDARIO_DEL_PASO_2"
+  }
+]
+```
+
+> Si una propiedad solo está en Airbnb o solo en Booking, simplemente
+> omite la clave que no necesites (`airbnb_ical` o `booking_ical`).
+
+> Puedes usar el mismo `calendar_id` para todas las propiedades
+> (todas aparecen en el mismo calendario) o uno distinto por propiedad.
+
+---
+
+## PASO 5 — Obtener las URLs iCal
+
+### Airbnb
+1. Ve a airbnb.es → Anuncios → selecciona el anuncio
+2. Pulsa **Disponibilidad** → **Conectar calendarios**
+3. Pulsa **Exportar calendario** → copia la URL `.ics`
+
+### Booking
+1. Ve a la Extranet de Booking → selecciona la propiedad
+2. **Calendario → Sincronización de calendarios**
+3. **Exportar calendario** → copia la URL `.ics`
+
+---
+
+## PASO 6 — Activar y probar
+
+1. En tu repositorio GitHub, ve a la pestaña **Actions**
+2. Verás el workflow "Sincronizar calendarios iCal"
+3. Pulsa **"Run workflow"** para ejecutarlo manualmente la primera vez
+4. Comprueba que aparece un tick verde ✅
+5. A partir de ahí se ejecutará solo cada 10 minutos
+
+---
+
+## RESULTADO FINAL
+
+- Las reservas de Airbnb aparecerán en **rojo** en Google Calendar
+- Las reservas de Booking aparecerán en **azul**
+- Los bloqueos aparecerán en **gris**
+- Si cancelas una reserva en Airbnb o Booking, desaparecerá sola del calendario
+- Funciona 24/7 sin coste y sin mantenimiento
+
+---
+
+## PREGUNTAS FRECUENTES
+
+**¿Cuánto cuesta?**
+Completamente gratis. GitHub Actions ofrece 2.000 minutos/mes gratuitos
+en repositorios privados, y cada ejecución dura menos de 30 segundos.
+
+**¿Es seguro?**
+Las URLs iCal y las credenciales se guardan como secrets cifrados en GitHub.
+Nadie puede verlos, ni siquiera tú una vez guardados.
+
+**¿Qué pasa si GitHub tiene un fallo puntual?**
+La siguiente ejecución (10 minutos después) lo compensará.
+
+**¿Puedo cambiar la frecuencia?**
+Sí, edita la línea `cron` en `.github/workflows/sync.yml`.
+Ejemplos: cada 5 min → `*/5 * * * *`, cada hora → `0 * * * *`
+(GitHub no permite menos de 5 minutos entre ejecuciones.)
+
+**¿Puedo añadir más propiedades después?**
+Sí, edita el secret `PROPERTIES_JSON` añadiendo más objetos al array.
