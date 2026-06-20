@@ -1,0 +1,29 @@
+name: Sincronizar calendarios iCal
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install requests google-api-python-client google-auth
+
+      - name: Ejecutar sincronización
+        env:
+          PROPERTIES_JSON:          ${{ secrets.PROPERTIES_JSON }}
+          GOOGLE_CREDENTIALS_JSON:  ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
+        run: python scripts/sync.py
