@@ -53,18 +53,35 @@ def parse_ical(text, platform, prop_name):
             s = s[:8]
             return f"{s[:4]}-{s[4:6]}-{s[6:8]}"
 
-        is_block = any(w in summary.upper() for w in ["BLOCK", "BLOQUEADO", "NOT AVAILABLE", "AIRBNB"])
+        # Airbnb: detectar bloqueos por palabras clave
+        # Booking: solo bloquear si el summary es exactamente "CLOSED" etc.
+        if platform == "airbnb":
+            is_block = any(w in summary.upper() for w in ["BLOCK", "BLOQUEADO", "NOT AVAILABLE", "AIRBNB", "CLOSED"])
+        else:
+            is_block = summary.upper() in ["CLOSED", "NOT AVAILABLE", "BLOQUEADO"]
+
         color = COLORS["block"] if is_block else COLORS[platform]
+
+        if is_block:
+            guest_name = "Bloqueo"
+            display_name = f"[{platform.upper()}] {prop_name}"
+        elif platform == "booking":
+            guest_name = summary if summary not in ["Reserva", "RESERVATION"] else "Reserva Booking"
+            display_name = f"{guest_name} — {prop_name}"
+        else:
+            guest_name = summary
+            display_name = f"{summary} — {prop_name}"
 
         events.append({
             "uid":      uid,
-            "summary":  f"[{platform.upper()}] {prop_name}" if is_block else f"{summary} — {prop_name}",
+            "summary":  display_name,
             "start":    to_date(dtstart),
             "end":      to_date(dtend),
             "color":    color,
             "platform": platform,
             "prop":     prop_name,
             "is_block": is_block,
+            "guest":    guest_name,
         })
     return events
 
@@ -186,8 +203,7 @@ def generate_public_json(all_reservations):
                     "platform": ev["platform"],
                     "start":    ev["start"],
                     "end":      ev["end"],
-                    # Solo incluimos el nombre si no es un bloqueo
-                    "guest":    ev["summary"].split(" — ")[0].replace(f"[{ev['platform'].upper()}] ", ""),
+                    "guest":    ev.get("guest", ev["summary"].split(" — ")[0]),
                 })
         except Exception:
             continue
