@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Diario</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f0f0f;
+  --surface: #1a1a1a;
+  --surface2: #222;
+  --border: #2a2a2a;
+  --text: #f0f0f0;
+  --text-secondary: #888;
+  --text-dim: #555;
+  --airbnb: #FF5A5F;
+  --airbnb-bg: rgba(255,90,95,0.1);
+  --booking: #4B8BFF;
+  --booking-bg: rgba(75,139,255,0.1);
+  --accent: #FF5A5F;
+  --radius: 10px;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', 'Courier New', monospace;
+}
+
+body { font-family: var(--font); background: var(--bg); color: var(--text); min-height: 100vh; }
+
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 14px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.logo { font-size: 12px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--text-secondary); }
+
+.date-nav { display: flex; align-items: center; gap: 8px; }
+.date-nav button {
+  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); cursor: pointer; font-size: 14px; padding: 5px 10px;
+}
+.date-nav button:hover { background: #2e2e2e; }
+.date-display { font-family: var(--mono); font-size: 13px; min-width: 200px; text-align: center; }
+.today-btn { font-size: 10px !important; padding: 4px 9px !important; border-color: var(--accent) !important; color: var(--accent) !important; text-transform: uppercase; letter-spacing: .06em; }
+
+.updated { font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+.dot-live { display: inline-block; width: 6px; height: 6px; background: #4CAF50; border-radius: 50%; margin-right: 5px; animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+.main { max-width: 800px; margin: 0 auto; padding: 20px; }
+
+.stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 20px; }
+.stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; display: flex; align-items: center; gap: 12px; }
+.stat-icon { font-size: 20px; }
+.stat-val { font-family: var(--mono); font-size: 26px; font-weight: 500; line-height: 1; }
+.stat-lbl { font-size: 10px; color: var(--text-secondary); margin-top: 3px; text-transform: uppercase; letter-spacing: .06em; }
+
+.section { margin-bottom: 18px; }
+.section-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.section-title { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); }
+.section-count { font-family: var(--mono); font-size: 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; color: var(--text-dim); padding: 1px 6px; }
+
+.cards { display: flex; flex-direction: column; gap: 6px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+.card-accent { width: 3px; height: 34px; border-radius: 2px; flex-shrink: 0; }
+.card-body { flex: 1; min-width: 0; }
+.card-name { font-size: 14px; font-weight: 500; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-meta { font-size: 11px; color: var(--text-secondary); display: flex; gap: 8px; flex-wrap: wrap; }
+.badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; letter-spacing: .04em; text-transform: uppercase; flex-shrink: 0; }
+.badge-airbnb { background: var(--airbnb-bg); color: var(--airbnb); }
+.badge-booking { background: var(--booking-bg); color: var(--booking); }
+.prop-tag { font-family: var(--mono); font-size: 10px; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
+.empty { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; color: var(--text-dim); font-size: 13px; }
+
+@media(max-width:600px) {
+  .stats-row { grid-template-columns: 1fr; }
+  .date-display { min-width: 140px; font-size: 11px; }
+  .main { padding: 14px; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+    <span class="logo">Panel Diario</span>
+    <div class="date-nav">
+      <button onclick="changeDay(-1)">‹</button>
+      <span class="date-display" id="dateDisplay"></span>
+      <button onclick="changeDay(1)">›</button>
+      <button class="today-btn" onclick="goToday()">Hoy</button>
+    </div>
+  </div>
+  <span class="updated" id="updatedLabel"></span>
+</div>
+
+<div class="main">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-icon">🔑</div><div><div class="stat-val" id="cEntradas">—</div><div class="stat-lbl">Entradas</div></div></div>
+    <div class="stat-card"><div class="stat-icon">🧳</div><div><div class="stat-val" id="cSalidas">—</div><div class="stat-lbl">Salidas</div></div></div>
+    <div class="stat-card"><div class="stat-icon">🧹</div><div><div class="stat-val" id="cLimpiezas">—</div><div class="stat-lbl">Limpiezas</div></div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-header"><span class="section-title">Entradas</span><span class="section-count" id="lEntradas">0</span></div>
+    <div class="cards" id="listEntradas"><div class="empty">Cargando...</div></div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
+    <div class="section-header"><span class="section-title">Salidas + Limpieza</span><span class="section-count" id="lSalidas">0</span></div>
+    <div class="cards" id="listSalidas"><div class="empty">Cargando...</div></div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="section">
+    <div class="section-header"><span class="section-title">Ocupadas hoy</span><span class="section-count" id="lOcupadas">0</span></div>
+    <div class="cards" id="listOcupadas"><div class="empty">Cargando...</div></div>
+  </div>
+</div>
+
+<script>
+const DAYS = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'];
+const MONTHS = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+
+let current = new Date(); current.setHours(0,0,0,0);
+let allReservations = [];
+
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function fmtDate(d) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = (d - today) / 86400000;
+  const base = `${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  if (diff === 0) return `Hoy — ${base}`;
+  if (diff === 1) return `Mañana — ${base}`;
+  if (diff === -1) return `Ayer — ${base}`;
+  return base;
+}
+
+function updateDisplay() { document.getElementById('dateDisplay').textContent = fmtDate(current); }
+function changeDay(d) { current.setDate(current.getDate() + d); updateDisplay(); renderDay(); }
+function goToday() { current = new Date(); current.setHours(0,0,0,0); updateDisplay(); renderDay(); }
+
+async function loadData() {
+  try {
+    const r = await fetch('reservas.json?_=' + Date.now());
+    const data = await r.json();
+    allReservations = data.reservations || [];
+    const upd = new Date(data.updated);
+    document.getElementById('updatedLabel').innerHTML =
+      `<span class="dot-live"></span>${upd.toLocaleTimeString('es-ES',{hour:'2-digit',minute:'2-digit'})}`;
+    renderDay();
+  } catch(e) {
+    document.getElementById('updatedLabel').textContent = 'Error al cargar';
+  }
+}
+
+function renderDay() {
+  const dateStr = isoDate(current);
+  const entradas = allReservations.filter(r => r.start === dateStr);
+  const salidas  = allReservations.filter(r => r.end === dateStr);
+  const ocupadas = allReservations.filter(r => r.start < dateStr && r.end > dateStr);
+
+  document.getElementById('cEntradas').textContent = entradas.length;
+  document.getElementById('cSalidas').textContent  = salidas.length;
+  document.getElementById('cLimpiezas').textContent = salidas.length;
+  document.getElementById('lEntradas').textContent = entradas.length;
+  document.getElementById('lSalidas').textContent  = salidas.length;
+  document.getElementById('lOcupadas').textContent = ocupadas.length;
+
+  renderList('listEntradas', entradas, 'entrada');
+  renderList('listSalidas',  salidas,  'salida');
+  renderList('listOcupadas', ocupadas, 'ocupada');
+}
+
+function renderList(id, items, type) {
+  const el = document.getElementById(id);
+  if (!items.length) {
+    const labels = { entrada:'Sin entradas hoy', salida:'Sin salidas hoy', ocupada:'Ninguna propiedad ocupada' };
+    el.innerHTML = `<div class="empty">${labels[type]}</div>`;
+    return;
+  }
+  el.innerHTML = items.map(r => {
+    const color = r.platform === 'airbnb' ? 'var(--airbnb)' : 'var(--booking)';
+    const plat  = r.platform === 'airbnb' ? 'Airbnb' : 'Booking';
+    const nights = Math.round((new Date(r.end) - new Date(r.start)) / 86400000);
+    const icon = type === 'entrada' ? '🔑' : type === 'salida' ? '🧳' : '🏠';
+    const extra = type === 'salida' ? '<span>· 🧹 Limpieza</span>' : '';
+    return `<div class="card">
+      <div class="card-accent" style="background:${color}"></div>
+      <div class="card-body">
+        <div class="card-name">${r.guest || 'Huésped'}</div>
+        <div class="card-meta">
+          <span>${icon} ${type==='entrada'?'Entrada':type==='salida'?'Salida':'En estancia'}</span>
+          <span>· ${r.start} → ${r.end}</span>
+          <span>· 🌙 ${nights} noche${nights!==1?'s':''}</span>
+          ${extra}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
+        <span class="badge badge-${r.platform}">${plat}</span>
+        <span class="prop-tag">${r.prop}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+updateDisplay();
+loadData();
+setInterval(loadData, 10 * 60 * 1000);
+</script>
+</body>
+</html>
