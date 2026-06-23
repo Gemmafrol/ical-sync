@@ -32,11 +32,6 @@ jobs:
           GOOGLE_CREDENTIALS_JSON:  ${{ secrets.GOOGLE_CREDENTIALS_JSON }}
         run: python scripts/sync.py
 
-      - name: Preparar carpeta docs
-        run: |
-          cp docs/index.html docs/index.html
-          ls -la docs/
-
       - name: Publicar en GitHub Pages
         uses: actions/upload-pages-artifact@v3
         with:
