@@ -1,5 +1,6 @@
 """
 sync.py — Sincroniza calendarios iCal de Airbnb y Booking con Google Calendar
+y genera un archivo JSON público con las reservas para el panel compartido.
 Se ejecuta automáticamente cada 10 minutos via GitHub Actions.
 """
 
@@ -12,30 +13,14 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 # ─── CONFIGURACIÓN ────────────────────────────────────────────────────────────
-# Las URLs iCal y el JSON de credenciales se leen desde variables de entorno
-# (configuradas como secrets en GitHub). Ver INSTRUCCIONES.md.
-
 PROPERTIES = json.loads(os.environ["PROPERTIES_JSON"])
-# Formato esperado:
-# [
-#   {
-#     "name": "Apartamento Centro 1",
-#     "airbnb_ical": "https://www.airbnb.es/calendar/ical/XXXX.ics",
-#     "booking_ical": "https://ical.booking.com/v1/export?t=XXXX",
-#     "calendar_id": "tu_email@gmail.com"  // o ID de un calendario secundario
-#   }
-# ]
-
 GOOGLE_CREDENTIALS = json.loads(os.environ["GOOGLE_CREDENTIALS_JSON"])
-# Contenido del archivo JSON de la cuenta de servicio de Google
+SYNC_WINDOW_DAYS = 180
 
-SYNC_WINDOW_DAYS = 180  # Sincronizar reservas de los próximos 6 meses
-
-# ─── COLORES EN GOOGLE CALENDAR ───────────────────────────────────────────────
 COLORS = {
-    "airbnb":  "11",  # Tomate (rojo)
-    "booking": "9",   # Pavo real (azul)
-    "block":   "8",   # Grafito
+    "airbnb":  "11",
+    "booking": "9",
+    "block":   "8",
 }
 
 # ─── GOOGLE CALENDAR CLIENT ───────────────────────────────────────────────────
@@ -78,6 +63,8 @@ def parse_ical(text, platform, prop_name):
             "end":      to_date(dtend),
             "color":    color,
             "platform": platform,
+            "prop":     prop_name,
+            "is_block": is_block,
         })
     return events
 
@@ -114,14 +101,12 @@ def sync_property(service, prop):
 
     if not all_events:
         print("  ⚠️  Sin eventos, omitiendo.")
-        return
+        return []
 
-    # Rango de fechas a sincronizar
     today     = datetime.now(timezone.utc).date()
     time_min  = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc).isoformat()
     time_max  = (datetime.now(timezone.utc) + timedelta(days=SYNC_WINDOW_DAYS)).isoformat()
 
-    # Obtener eventos existentes en Google Calendar
     existing = {}
     page_token = None
     while True:
@@ -141,17 +126,14 @@ def sync_property(service, prop):
         if not page_token:
             break
 
-    # UIDs del iCal actual
     current_uids = {e["uid"] for e in all_events}
 
-    # Eliminar eventos que ya no existen en el iCal
     deleted = 0
     for uid, gcal_event in existing.items():
         if uid not in current_uids:
             service.events().delete(calendarId=calendar_id, eventId=gcal_event["id"]).execute()
             deleted += 1
 
-    # Crear o actualizar eventos
     created = updated = 0
     for ev in all_events:
         body = {
@@ -170,7 +152,6 @@ def sync_property(service, prop):
         }
         if ev["uid"] in existing:
             gcal_event = existing[ev["uid"]]
-            # Solo actualiza si algo cambió
             if (gcal_event.get("start", {}).get("date") != ev["start"] or
                 gcal_event.get("end",   {}).get("date") != ev["end"]):
                 service.events().update(
@@ -184,14 +165,52 @@ def sync_property(service, prop):
             created += 1
 
     print(f"  ✅ Creados: {created} | Actualizados: {updated} | Eliminados: {deleted}")
+    return [e for e in all_events if not e["is_block"]]
+
+
+# ─── GENERAR JSON PÚBLICO ─────────────────────────────────────────────────────
+def generate_public_json(all_reservations):
+    """Genera docs/reservas.json para el panel público en GitHub Pages."""
+    today = datetime.now(timezone.utc).date()
+    window_end = today + timedelta(days=60)
+
+    # Filtrar reservas de los próximos 60 días
+    upcoming = []
+    for ev in all_reservations:
+        try:
+            start = datetime.strptime(ev["start"], "%Y-%m-%d").date()
+            end   = datetime.strptime(ev["end"],   "%Y-%m-%d").date()
+            if end >= today and start <= window_end:
+                upcoming.append({
+                    "prop":     ev["prop"],
+                    "platform": ev["platform"],
+                    "start":    ev["start"],
+                    "end":      ev["end"],
+                    # Solo incluimos el nombre si no es un bloqueo
+                    "guest":    ev["summary"].split(" — ")[0].replace(f"[{ev['platform'].upper()}] ", ""),
+                })
+        except Exception:
+            continue
+
+    os.makedirs("docs", exist_ok=True)
+    output = {
+        "updated": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "reservations": upcoming
+    }
+    with open("docs/reservas.json", "w", encoding="utf-8") as f:
+        json.dump(output, f, ensure_ascii=False, indent=2)
+    print(f"\n📄 JSON público generado: {len(upcoming)} reservas en docs/reservas.json")
 
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 def main():
     print(f"🔄 Iniciando sincronización — {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     service = get_calendar_service()
+    all_reservations = []
     for prop in PROPERTIES:
-        sync_property(service, prop)
+        reservations = sync_property(service, prop)
+        all_reservations.extend(reservations)
+    generate_public_json(all_reservations)
     print("\n✅ Sincronización completada.")
 
 if __name__ == "__main__":
