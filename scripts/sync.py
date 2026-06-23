@@ -55,10 +55,13 @@ def parse_ical(text, platform, prop_name):
 
         # Airbnb: detectar bloqueos por palabras clave
         # Booking: solo bloquear si el summary es exactamente "CLOSED" etc.
+        BLOCK_WORDS = ["BLOCK", "BLOQUEADO", "NOT AVAILABLE", "CLOSED"]
+
         if platform == "airbnb":
-            is_block = any(w in summary.upper() for w in ["BLOCK", "BLOQUEADO", "NOT AVAILABLE", "AIRBNB", "CLOSED"])
+            is_block = any(w in summary.upper() for w in BLOCK_WORDS + ["AIRBNB"])
         else:
-            is_block = summary.upper() in ["CLOSED", "NOT AVAILABLE", "BLOQUEADO"]
+            # Booking: "CLOSED - Not available" etc. son reservas reales, no bloqueos
+            is_block = False
 
         color = COLORS["block"] if is_block else COLORS[platform]
 
@@ -66,8 +69,9 @@ def parse_ical(text, platform, prop_name):
             guest_name = "Bloqueo"
             display_name = f"[{platform.upper()}] {prop_name}"
         elif platform == "booking":
-            guest_name = summary if summary not in ["Reserva", "RESERVATION"] else "Reserva Booking"
-            display_name = f"{guest_name} — {prop_name}"
+            # Booking no comparte nombres de huéspedes — mostramos texto genérico
+            guest_name = "Reserva Booking"
+            display_name = f"Reserva Booking — {prop_name}"
         else:
             guest_name = summary
             display_name = f"{summary} — {prop_name}"
