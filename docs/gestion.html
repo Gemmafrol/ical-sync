@@ -137,6 +137,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
 .badge { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: .04em; }
 .badge-airbnb { background: var(--airbnb-bg); color: var(--airbnb); }
 .badge-booking { background: var(--booking-bg); color: var(--booking); }
+.badge-directo { background: var(--green-bg); color: var(--green); }
 .prop-tag { font-family: var(--mono); font-size: 10px; color: var(--text-dim); background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; }
 .empty { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; text-align: center; color: var(--text-dim); font-size: 13px; }
 
@@ -276,6 +277,7 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   <div class="nav-tab" onclick="showTab('mensual')">📆 Calendario</div>
   <div class="nav-tab" onclick="showTab('limpiadoras')">👤 Limpiadoras</div>
   <div class="nav-tab" onclick="showTab('whatsapp')">💬 WhatsApp</div>
+  <div class="nav-tab" onclick="showTab('directas')">➕ Directas</div>
 </div>
 
 <div class="main">
@@ -381,6 +383,24 @@ body { font-family: var(--font); background: var(--bg); color: var(--text); min-
   </div>
 </div>
 
+<!-- RESERVAS DIRECTAS -->
+<div id="tab-directas" class="tab-content">
+  <div class="income-form">
+    <h4>Nueva reserva directa</h4>
+    <div class="form-grid">
+      <div class="form-group"><label>Huésped</label><input type="text" id="drGuest" placeholder="Nombre del huésped"></div>
+      <div class="form-group"><label>Propiedad</label><select id="drProp"></select></div>
+      <div class="form-group"><label>Check-in</label><input type="date" id="drStart"></div>
+      <div class="form-group"><label>Check-out</label><input type="date" id="drEnd"></div>
+      <div class="form-group"><label>Importe (€)</label><input type="number" id="drAmount" placeholder="0"></div>
+      <div class="form-group"><label>Notas</label><input type="text" id="drNotes" placeholder="Opcional"></div>
+    </div>
+    <button class="btn-add" onclick="addDirectRes()">+ Añadir reserva</button>
+  </div>
+  <div class="section-hdr"><span class="section-title">Reservas directas</span><span class="badge-count" id="bDirect">0</span></div>
+  <div class="cards" id="directList"></div>
+</div>
+
 <!-- WHATSAPP -->
 <div id="tab-whatsapp" class="tab-content">
   <div class="section-hdr"><span class="section-title">Mensajes del día</span></div>
@@ -404,6 +424,7 @@ let cleaners   = JSON.parse(localStorage.getItem('panel_cleaners')  || '[]');
 let assignments = JSON.parse(localStorage.getItem('panel_assignments') || '{}'); // prop -> cleaner
 let cleanDone  = JSON.parse(localStorage.getItem('panel_cleandone') || '{}');
 let historial  = JSON.parse(localStorage.getItem('panel_historial') || '[]');
+let directRes  = JSON.parse(localStorage.getItem('panel_directres') || '[]');
 
 const PROPS = ['ASYS','COS','M2','M4','TREBE','L3','L6','L4','M5','S1','BERES','NUNA','MENS','NEAÑO','S2','M1','L2','M3'];
 const TASKS = ['Cambiar ropa de cama','Limpiar baño','Fregar cocina','Aspirar y fregar suelos','Reponer amenities','Comprobar electrodomésticos','Sacar basura','Revisar inventario'];
@@ -417,12 +438,13 @@ function showTab(id){
   document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
   document.querySelectorAll('.nav-tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+id).classList.add('active');
-  const tabs={diario:0,ingresos:1,limpieza:2,incidencias:3,historial:4,mensual:5,limpiadoras:6,whatsapp:7};
+  const tabs={diario:0,ingresos:1,limpieza:2,incidencias:3,historial:4,mensual:5,limpiadoras:6,whatsapp:7,directas:8};
   document.querySelectorAll('.nav-tab')[tabs[id]].classList.add('active');
   if(id==='mensual')renderCal();
   if(id==='limpiadoras')renderCleaners();
   if(id==='whatsapp')renderWhatsApp();
   if(id==='historial')renderHistorial();
+  if(id==='directas')renderDirectRes();
 }
 
 // ─── DATE NAV ─────────────────────────────────────────────────────────────────
@@ -452,7 +474,7 @@ async function loadData(){
 
 // ─── POPULATE SELECTS ─────────────────────────────────────────────────────────
 function populateSelects(){
-  ['iProp','incProp','assignProp'].forEach(id=>{
+  ['iProp','incProp','assignProp','drProp'].forEach(id=>{
     const el=document.getElementById(id); if(!el)return;
     el.innerHTML=PROPS.map(p=>`<option>${p}</option>`).join('');
   });
@@ -461,9 +483,10 @@ function populateSelects(){
 // ─── RENDER DAY ───────────────────────────────────────────────────────────────
 function renderDay(){
   const dateStr=isoDate(currentDate);
-  const entradas=reservations.filter(r=>r.start===dateStr);
-  const salidas=reservations.filter(r=>r.end===dateStr);
-  const ocupadas=reservations.filter(r=>r.start<dateStr&&r.end>dateStr);
+  const allRes=[...reservations,...directRes.map(r=>({...r,platform:'directo'}))];
+  const entradas=allRes.filter(r=>r.start===dateStr);
+  const salidas=allRes.filter(r=>r.end===dateStr);
+  const ocupadas=allRes.filter(r=>r.start<dateStr&&r.end>dateStr);
 
   document.getElementById('cEnt').textContent=entradas.length;
   document.getElementById('cSal').textContent=salidas.length;
@@ -482,8 +505,8 @@ function renderList(id, items, type){
   const el=document.getElementById(id);
   if(!items.length){ el.innerHTML=`<div class="empty">${type==='entrada'?'Sin entradas':'type'==='salida'?'Sin salidas':'Ninguna ocupada'}</div>`; return; }
   el.innerHTML=items.map(r=>{
-    const color=r.platform==='airbnb'?'var(--airbnb)':'var(--booking)';
-    const plat=r.platform==='airbnb'?'Airbnb':'Booking';
+    const color=r.platform==='airbnb'?'var(--airbnb)':r.platform==='directo'?'var(--green)':'var(--booking)';
+    const plat=r.platform==='airbnb'?'Airbnb':r.platform==='directo'?'Directo':'Booking';
     const nights=Math.round((new Date(r.end)-new Date(r.start))/86400000);
     const cleaner=assignments[r.prop]||'—';
     return`<div class="card">
@@ -674,7 +697,8 @@ function renderCal(){
     const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const c=document.createElement('div'); c.className='cal-cell'+(dateStr===todayStr?' today':'');
     const dn=document.createElement('div'); dn.className='cal-day'; dn.innerHTML=`<span>${d}</span>`; c.appendChild(dn);
-    const dayRes=reservations.filter(r=>dateStr>=r.start&&dateStr<r.end);
+    const allCalRes=[...reservations,...directRes.map(r=>({...r,platform:'directo'}))];
+    const dayRes=allCalRes.filter(r=>dateStr>=r.start&&dateStr<r.end);
     dayRes.slice(0,3).forEach(r=>{
       const dot=document.createElement('div'); dot.className=`cal-dot ${r.platform}`;
       dot.textContent=r.prop; dot.title=`${r.guest} · ${r.prop}`; c.appendChild(dot);
@@ -753,6 +777,58 @@ function copyWA(btn,encoded){
     btn.textContent='✓ Copiado';
     setTimeout(()=>btn.textContent='Copiar mensaje',2000);
   });
+}
+
+// ─── RESERVAS DIRECTAS ────────────────────────────────────────────────────────
+function addDirectRes(){
+  const guest=document.getElementById('drGuest').value.trim();
+  const prop=document.getElementById('drProp').value;
+  const start=document.getElementById('drStart').value;
+  const end=document.getElementById('drEnd').value;
+  const amount=parseFloat(document.getElementById('drAmount').value)||0;
+  const notes=document.getElementById('drNotes').value.trim();
+  if(!guest||!start||!end){alert('Introduce huésped y fechas');return;}
+  if(end<=start){alert('El check-out debe ser posterior al check-in');return;}
+  directRes.push({id:Date.now(),guest,prop,start,end,amount,notes,platform:'directo'});
+  save('panel_directres',directRes);
+  document.getElementById('drGuest').value='';
+  document.getElementById('drAmount').value='';
+  document.getElementById('drNotes').value='';
+  renderDirectRes();
+  renderDay();
+}
+
+function delDirectRes(id){
+  directRes=directRes.filter(r=>r.id!==id);
+  save('panel_directres',directRes);
+  renderDirectRes();
+  renderDay();
+}
+
+function renderDirectRes(){
+  document.getElementById('bDirect').textContent=directRes.length;
+  const el=document.getElementById('directList');
+  if(!directRes.length){el.innerHTML='<div class="empty">Sin reservas directas</div>';return;}
+  el.innerHTML=[...directRes].sort((a,b)=>a.start.localeCompare(b.start)).map(r=>{
+    const nights=Math.round((new Date(r.end)-new Date(r.start))/86400000);
+    return`<div class="card">
+      <div class="card-stripe" style="background:var(--green)"></div>
+      <div class="card-body">
+        <div class="card-name">${r.guest}</div>
+        <div class="card-meta">
+          <span>📅 ${r.start} → ${r.end}</span>
+          <span>🌙 ${nights} noche${nights!==1?'s':''}</span>
+          ${r.amount?`<span>💶 ${r.amount} €</span>`:''}
+          ${r.notes?`<span>📝 ${r.notes}</span>`:''}
+        </div>
+      </div>
+      <div class="card-right">
+        <span class="badge badge-directo">Directo</span>
+        <span class="prop-tag">${r.prop}</span>
+        <button class="btn-del" onclick="delDirectRes(${r.id})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
